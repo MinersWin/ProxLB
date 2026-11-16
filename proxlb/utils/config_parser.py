@@ -100,6 +100,11 @@ class Config(BaseModel):
             strict: bool = True
             type: Optional["Config.AffinityType"] = None
 
+        class BackupGuard(BaseModel):
+            enable: bool = False
+            lead_minutes: int = Field(default=30, ge=0)
+
+        backup_guard: BackupGuard = Field(default_factory=BackupGuard)
         balance_larger_guests_first: bool = False
         balance_types: list["Config.GuestType"] = []
         balanciness: int = 10

@@ -100,6 +100,10 @@ class Balancing:
         stale target. Guests that would not be migrated anyway (already on their
         target node, ignored, or of a type excluded from balancing) skip this check.
 
+        If the backup guard is enabled, no further guest is dispatched as soon as a
+        backup job is running or about to start. Migrations that are already running
+        are not aborted.
+
         Args:
             proxmox_api (ProxmoxApi): The Proxmox API client instance.
             proxlb_data (ProxLbData): ProxLB load balancing data.
@@ -117,6 +121,7 @@ class Balancing:
         jobs_to_wait: list[Balancing.RebalancingJob] = []
         max_retries = proxlb_data.meta.balancing.max_job_validation
         error_occurred = False
+        backup_active = False
 
         logger.debug("Starting: Balancing loop for guests.")
         for guest_name, guest_meta in proxlb_data.guests.items():
@@ -138,6 +143,13 @@ class Balancing:
                 raise NodeUnavailableError(
                     "At least one cluster node became unavailable during balancing.")
 
+            if guest_will_move and Helper.check_backup_active(proxmox_api, proxlb_data):
+                logger.info(
+                    "Balancing: Backup guard is active. "
+                    "Not starting any further migrations in this run.")
+                backup_active = True
+                break
+
             job_id = Balancing._exec_rebalancing(proxmox_api, proxlb_data, guest_name)
             logger.debug(f"Balancing: job_id for {guest_name}: {job_id!r}, jobs_to_wait len: {len(jobs_to_wait)}")
             if job_id is not None:
@@ -158,6 +170,10 @@ class Balancing:
             logger.warning(
                 "Balancing: Some migrations did not complete successfully. "
                 "Please check the logs and Proxmox cluster manually.")
+            logger.debug("Finished: balance.")
+            return False
+
+        if backup_active:
             logger.debug("Finished: balance.")
             return False
 

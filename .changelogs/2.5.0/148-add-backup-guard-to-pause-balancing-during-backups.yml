@@ -1,0 +1,2 @@
+added:
+  - Add option `backup_guard` to pause balancing while a backup job (vzdump) is running or about to start. [#148]

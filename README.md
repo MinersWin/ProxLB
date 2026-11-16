@@ -341,6 +341,9 @@ The following options can be set in the configuration file `proxlb.yaml`:
 |  | mode |  | used | `Str` | The balancing mode that should be used. [values: `used` (default), `assigned`, `psi` (pressure)] |
 |  | balance_larger_guests_first |  | False | `Bool` | Option to prefer larger/smaller guests first |
 |  | ignore_zfs_arc |  | False | `Bool` | Do not count the ZFS ARC as used memory of a node. Requires PVE >= 9. |
+|  | `backup_guard` |  |  | `Dict` | Config block to pause balancing while a backup job (vzdump) is running or about to start. |
+|  |  | enable | False | `Bool` | If migrations should be paused while a backup job is running or about to start. |
+|  |  | lead_minutes | 30 | `Int` | Also pause when an enabled backup job starts within this many minutes. |
 |  | node_resource_reserve |  | { default: { memory: 4 }, { node01: { memory: 6 }} } | `Dict` | A dict of pool names and their type for creating affinity/anti-affinity rules |
 |  | psi |  | { nodes: { memory: { pressure_full: 0.20, pressure_some: 0.20, pressure_spikes: 1.00 }}} | `Dict` | A dict of PSI based thresholds for nodes and guests |
 |  | pools |  | pools: { dev: { type: affinity }, de-nbg01-db: { type: anti-affinity }} | `Dict` | A dict of pool names and their type for creating affinity/anti-affinity rules |
@@ -400,6 +403,9 @@ balancing:
   mode: used
   balance_larger_guests_first: False
   ignore_zfs_arc: False
+  backup_guard:
+    enable: False
+    lead_minutes: 30
   node_resource_reserve:
     defaults:
       memory: 4

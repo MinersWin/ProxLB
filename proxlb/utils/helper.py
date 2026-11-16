@@ -464,3 +464,49 @@ class Helper:
 
         logger.debug("Finished: check_nodes_available.")
         return True
+
+    @staticmethod
+    def check_backup_active(proxmox_api: "ProxmoxApi", proxlb_data: ProxLbData) -> bool:
+        """
+        Validates if a backup job (vzdump) is running on a node or if an enabled backup job starts within the configured lead time.
+
+        A backup job only locks the guest it is currently backing up. Guests that are migrated before the job reaches them make the job fail, so no migration should be started in the meantime.
+
+        Args:
+            proxmox_api (ProxmoxApi): The Proxmox API client instance.
+            proxlb_data (ProxLbData): ProxLB load balancing data.
+
+        Returns:
+            bool: True if a backup job is running or about to start or if this could not be queried, False otherwise or if the backup guard is disabled.
+        """
+        logger.debug("Starting: check_backup_active.")
+        backup_guard = proxlb_data.meta.balancing.backup_guard
+
+        if not backup_guard.enable:
+            logger.debug("Finished: check_backup_active.")
+            return False
+
+        try:
+            for node_name in proxlb_data.nodes:
+                if proxmox_api.nodes(node_name).tasks.get(source="active", typefilter="vzdump"):
+                    logger.info(f"Helper: A backup job is running on node {node_name}.")
+                    logger.debug("Finished: check_backup_active.")
+                    return True
+
+            # The next run is also reported for disabled backup jobs
+            for backup_job in proxmox_api.cluster.backup.get():
+                next_run = backup_job.get("next-run")
+                if next_run is None or not backup_job.get("enabled", 1):
+                    continue
+
+                if next_run - time.time() <= backup_guard.lead_minutes * 60:
+                    logger.info(f"Helper: Backup job {backup_job['id']} starts within the next {backup_guard.lead_minutes} minutes.")
+                    logger.debug("Finished: check_backup_active.")
+                    return True
+        except (proxmoxer.core.ResourceException, requests.exceptions.RequestException) as backup_error:
+            logger.warning(f"Helper: Failed to query backup jobs: {backup_error}")
+            logger.debug("Finished: check_backup_active.")
+            return True
+
+        logger.debug("Finished: check_backup_active.")
+        return False

@@ -57,6 +57,7 @@ def _proxlb_data(
     data.meta.balancing.live = True
     data.meta.balancing.with_local_disks = True
     data.meta.balancing.with_conntrack_state = True
+    data.meta.balancing.backup_guard.enable = False
     data.guests = guests
     data.nodes = {}
     return data
@@ -335,3 +336,27 @@ def test_balance_aborts_when_a_node_becomes_unavailable(
         Balancing.balance(MagicMock(), proxlb_data)
 
     mock_exec_vm.assert_not_called()
+
+
+@patch("proxlb.models.balancing.time.sleep")
+@patch.object(Balancing, "_get_rebalancing_job_status")
+@patch.object(Balancing, "_exec_rebalancing_vm")
+@patch.object(Helper, "check_backup_active")
+def test_balance_stops_dispatching_when_a_backup_job_becomes_active(
+        mock_check_backup: MagicMock, mock_exec_vm: MagicMock, mock_get_status: MagicMock, mock_sleep: MagicMock,
+) -> None:
+    """balance() must not start further migrations once a backup job is running, but still wait for the running one."""
+    proxlb_data = _proxlb_data({
+        "vm1": _guest(101, "node1", "node2"),
+        "vm2": _guest(102, "node1", "node2"),
+    }, parallel=False)
+
+    mock_check_backup.side_effect = [False, True]
+    mock_exec_vm.return_value = "job-vm1"
+    mock_get_status.return_value = FINISHED
+
+    result = Balancing.balance(MagicMock(), proxlb_data)
+
+    assert result is False
+    mock_exec_vm.assert_called_once()
+    mock_get_status.assert_called_once()

@@ -160,7 +160,10 @@ while True:
             _skipped_greedy_balancing = False
             if proxlb_data.meta.balancing.enable:
                 if not cli_args.dry_run:
-                    if (_solver_cfg.enable
+                    if Helper.check_backup_active(proxmox_api, proxlb_data):
+                        _skipped_greedy_balancing = True
+                        logger.info("Backup guard is active. Skipping balancing for this run.")
+                    elif (_solver_cfg.enable
                             and _solver_cfg.mode == "active"):
                         if _solver_plan is not None:
                             try:

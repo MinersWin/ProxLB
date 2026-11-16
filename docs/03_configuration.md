@@ -25,6 +25,7 @@
         2. [Assigned Resources](#assigned-resources)
         3. [Pressure (PSI) based Resources](#pressure-psi-based-resources)
     11. [HA-Mode (ProxLB)](#ha-mode)
+    12. [Backup Guard](#12-backup-guard)
 
 ## Authentication / User Accounts / Permissions
 ### Authentication
@@ -425,3 +426,24 @@ Make sure to enable the HA mode on all instances to avoid parallel evaluations o
 service:
   enable_ha: true
 ```
+
+### 12. Backup Guard
+A backup job (vzdump) works through the guests of a node one after another and only locks the guest it is currently backing up. When ProxLB migrates a guest that the job has not reached yet, the backup of this guest fails and the whole job ends with errors. With the backup guard enabled, ProxLB does not start migrations while a backup job is running or about to start.
+
+```yaml
+balancing:
+  backup_guard:
+    enable: True
+    lead_minutes: 30
+```
+
+ProxLB checks before each run and again before each migration if:
+
+- A vzdump task is running on one of the nodes
+- An enabled backup job is scheduled to start within the next `lead_minutes` minutes
+
+If one of them matches, ProxLB logs the reason and starts no further migration until the next run. Migrations that are already running are not aborted. Guests on maintenance nodes are not moved away during that time either. With the solver in `active` mode, the blocked steps are logged as failed and the solver re-plans until `active_step_retries` is used up. No migration is started during that time.
+
+`lead_minutes` should cover the time your longest migration takes, otherwise a migration that was started right before can still reach into the backup. Setting it to `0` only checks for running backup jobs. A backup that is started manually while a migration is running cannot be avoided. In that case only the guests that are being migrated at that moment are affected.
+
+Both checks only use the Proxmox API and need the `Sys.Audit` permission, which ProxLB already requires. If the backup jobs cannot be queried, ProxLB does not start migrations either. The option is disabled by default.
